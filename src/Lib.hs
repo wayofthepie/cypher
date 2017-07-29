@@ -35,18 +35,18 @@ data PathEntity a = PathEntity
   } | EmptyPathEntity deriving Eq
 
 instance Show (PathEntity N) where
-  show (PathEntity maybeVar labels) =
-    let lbls = foldr (\lbl acc -> acc <> ":" <> lbl ) "" labels
-        pathEntity = maybe lbls (\v -> "("#|v <> lbls|#")") maybeVar
-    in T.unpack pathEntity
+  show pe@(PathEntity _ _) =showPathEntity "(" ")" pe
   show EmptyPathEntity = "()"
 
 instance Show (PathEntity R) where
-  show (PathEntity maybeVar labels) =
-    let lbls = foldr (\lbl acc -> acc <> ":" <> lbl ) "" labels
-        pathEntity = maybe lbls (\v -> "["#|v <> lbls|#"]") maybeVar
-    in T.unpack pathEntity
+  show pe@(PathEntity _ _) = showPathEntity "[" "]" pe
   show EmptyPathEntity = "[]"
+
+showPathEntity :: T.Text -> T.Text -> PathEntity a -> String
+showPathEntity lbrac rbrac (PathEntity maybeVar labels) =
+  let lbls = foldr (\lbl acc -> acc <> ":" <> lbl ) "" labels
+      pathEntity = maybe lbls (\v -> lbrac <> v <> lbls <> rbrac) maybeVar
+  in T.unpack pathEntity
 
 node :: T.Text -> [T.Text] -> PathEntity N
 node var lbls = PathEntity (Just var) lbls

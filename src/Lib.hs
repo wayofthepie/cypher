@@ -1,43 +1,80 @@
 module Lib where
 
+import Data.List
+import Data.Monoid
 import qualified Data.Text as T
 
-import Prelude hiding ((-), Left)
+newtype Pattern = Pattern [PatternPart] deriving (Eq)
 
-newtype Pattern = Pattern [PatternPart] deriving (Eq, Show)
 data PatternPart
-  =  Assigned PatternElement
+  =  Assigned Variable PatternElement
   | Anonymous PatternElement
-  deriving (Eq, Show)
+  deriving (Eq)
 
-newtype PatternElement = E Path deriving (Eq, Show)
-data Path = Path NodePattern (Maybe PatternElementChain) deriving (Eq, Show)
+newtype PatternElement = PatternElement Path deriving (Eq)
+data Path = Path NodePattern (Maybe PatternElementChain) deriving (Eq)
+
+-- | Represents nodes in a pattern.
+-- {
+--  (n:Label {name: "SomeName"})
+-- }
 data NodePattern = NodePattern
-  { _var :: T.Text
-  , _labels :: [T.Text]
-  , _props :: [T.Text]
-  } deriving (Eq, Show)
+  { _var :: Maybe Variable
+  , _labels :: [Label]
+  , _props :: [Property]
+  } deriving (Eq)
+
+genNodePattern :: NodePattern -> T.Text
+genNodePattern (NodePattern maybeVar labels props) =
+  genNodePattern'
+  where
+    var = justOrEmpty maybeVar
+    genNodePattern' = T.pack "("
+      <> foldLabels var labels
+      <> T.pack " {" <> foldProps <> T.pack "}"
+      <> T.pack ")"
+    foldLabels = foldr (\(Label l) acc -> acc <> T.pack ":" <> l)
+    (h,props') = maybe (T.empty, [])
+      (\(Property k v, props') ->
+        (k <> T.pack ":" <> T.pack "\"" <> v <> T.pack "\"", props'))
+      (uncons props)
+    foldProps = foldr
+      (\(Property k v) acc -> acc <> T.pack ", " <> k <> T.pack ":" <> T.pack "\"" <> v <> T.pack "\"") h props'
+
+-- | Empty string if nothing, otherwise the variable value.
+justOrEmpty :: Maybe Variable -> T.Text
+justOrEmpty (Just (Variable v)) = v
+justOrEmpty Nothing = T.empty
+
 data PatternElementChain = PatternElementChain RelationshipPattern NodePattern
-  deriving (Eq, Show)
+  deriving (Eq)
 
 data RelationshipPattern
   = BiDirectional (Maybe RelationshipDetail)
   | ArrowLeft (Maybe RelationshipDetail)
   | ArrowRight (Maybe RelationshipDetail)
   | NoDirection (Maybe RelationshipDetail)
-  deriving (Eq, Show)
+  deriving (Eq)
 
 -- | TODO support range literals.
 data RelationshipDetail = RelationshipDetail
   { _relVar :: Maybe Variable
-  , _relTypes :: Maybe RelationshipTypes
+  , _relTypes :: [RelationshipType]
   , _relProperties :: [Property]
-  } deriving (Eq, Show)
+  } deriving (Eq)
 
 -- | TODO is this sufficient?
-newtype RelationshipTypes = RelationshipTypes [T.Text] deriving (Eq, Show)
+newtype RelationshipType = RelationshipType T.Text deriving (Eq)
 
-newtype Variable = Variable T.Text deriving (Eq, Show)
+newtype Variable = Variable T.Text deriving (Eq)
 
 -- | TODO the cypher spec has this as a MapLiteral or a parameter
-newtype Property = Property T.Text deriving (Eq, Show)
+data Property = Property T.Text T.Text deriving (Eq)
+newtype Label = Label T.Text deriving (Eq)
+
+newtype Optional = Optional T.Text deriving (Eq)
+
+data Match = Match (Maybe Optional) Pattern deriving (Eq)
+
+-- node :: Variable -> [Label] -> [Property] -> NodePattern
+-- node = NodePattern

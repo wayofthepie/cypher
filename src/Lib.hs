@@ -1,76 +1,43 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Lib where
 
-import Control.Monad.State
-import Data.Functor
-import qualified Data.Map as M
-import Data.Maybe
-import Data.Monoid ((<>))
 import qualified Data.Text as T
-import Fmt
 
 import Prelude hiding ((-), Left)
 
-data N
-data R
-data Direction = L | R | Bi | None deriving Show
-data PathComponent where
-    Relationship  :: PathComponent -> PathEntity R -> PathComponent -> Direction -> PathComponent
-    Node          :: PathEntity N -> PathComponent
+newtype Pattern = Pattern [PatternPart] deriving (Eq, Show)
+data PatternPart
+  =  Assigned PatternElement
+  | Anonymous PatternElement
+  deriving (Eq, Show)
 
-instance Show PathComponent where
-  show (Relationship n r n2 Bi) = (""#|show n|#"<-"#|show r|#"->"#|show n2|#"")
-  show (Relationship n r n2 L) = (""#|show n|#"<-"#|show r|#"-"#|show n2|#"")
-  show (Relationship n r n2 R) = (""#|show n|#"-"#|show r|#"->"#|show n2|#"")
-  show (Relationship n r n2 None) = (""#|show n|#"-"#|show r|#"-"#|show n2|#"")
-  show (Node n) = show n
-
-
-data PathEntity a = PathEntity
-  { _var :: Maybe T.Text
+newtype PatternElement = E Path deriving (Eq, Show)
+data Path = Path NodePattern (Maybe PatternElementChain) deriving (Eq, Show)
+data NodePattern = NodePattern
+  { _var :: T.Text
   , _labels :: [T.Text]
-  } | EmptyPathEntity deriving Eq
+  , _props :: [T.Text]
+  } deriving (Eq, Show)
+data PatternElementChain = PatternElementChain RelationshipPattern NodePattern
+  deriving (Eq, Show)
 
-instance Show (PathEntity N) where
-  show pe@(PathEntity _ _) =showPathEntity "(" ")" pe
-  show EmptyPathEntity = "()"
+data RelationshipPattern
+  = BiDirectional (Maybe RelationshipDetail)
+  | ArrowLeft (Maybe RelationshipDetail)
+  | ArrowRight (Maybe RelationshipDetail)
+  | NoDirection (Maybe RelationshipDetail)
+  deriving (Eq, Show)
 
-instance Show (PathEntity R) where
-  show pe@(PathEntity _ _) = showPathEntity "[" "]" pe
-  show EmptyPathEntity = "[]"
+-- | TODO support range literals.
+data RelationshipDetail = RelationshipDetail
+  { _relVar :: Maybe Variable
+  , _relTypes :: Maybe RelationshipTypes
+  , _relProperties :: [Property]
+  } deriving (Eq, Show)
 
-showPathEntity :: T.Text -> T.Text -> PathEntity a -> String
-showPathEntity lbrac rbrac (PathEntity maybeVar labels) =
-  let lbls = foldr (\lbl acc -> acc <> ":" <> lbl ) "" labels
-      pathEntity = maybe lbls (\v -> lbrac <> v <> lbls <> rbrac) maybeVar
-  in T.unpack pathEntity
+-- | TODO is this sufficient?
+newtype RelationshipTypes = RelationshipTypes [T.Text] deriving (Eq, Show)
 
-node :: T.Text -> [T.Text] -> PathEntity N
-node var lbls = PathEntity (Just var) lbls
+newtype Variable = Variable T.Text deriving (Eq, Show)
 
-relEntity :: T.Text -> [T.Text] -> PathEntity R
-relEntity var lbls = PathEntity (Just var) lbls
-
-rel :: PathEntity R -> PathEntity N -> Maybe (PathEntity R, PathEntity N)
-rel r n = Just (r,n)
-
-match :: PathComponent -> State (M.Map T.Text T.Text) PathComponent
-match pc@(Relationship lPc r rPc _) = do
-  match lPc
-  isUniqueVar (_var r)
-  match rPc
-  pure pc
-match pc@(Node n) = isUniqueVar (_var n) >> pure pc
-
-isUniqueVar :: Maybe T.Text -> State (M.Map T.Text T.Text) ()
-isUniqueVar maybeVar = case maybeVar of
-  Just v -> do
-    varMap <- get
-    case M.lookup v varMap of
-      Nothing -> do
-        modify (\m -> M.insert v "" m)
-      Just val -> error  (show v ++ show varMap)
-  Nothing -> pure ()
+-- | TODO the cypher spec has this as a MapLiteral or a parameter
+newtype Property = Property T.Text deriving (Eq, Show)

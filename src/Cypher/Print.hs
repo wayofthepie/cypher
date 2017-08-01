@@ -27,7 +27,7 @@ genPatternPartCypher (Anonymous element) = genPatternElemCypher element
 genPatternElemCypher :: PatternElement -> T.Text
 genPatternElemCypher (PatternElement node (Just chain)) =
   genNodeCypher node <> genPatternChainCypher chain
-genPathCypher (PatternElement node Nothing) = genNodeCypher node
+genPatternElemCypher (PatternElement node Nothing) = genNodeCypher node
 
 
 genPatternChainCypher :: PatternElementChain -> T.Text
@@ -55,14 +55,19 @@ foldVarWithLabels maybeVar labels =
 
 
 genRelationshipCypher :: RelationshipPattern -> T.Text
-genRelationshipCypher (BiDirectional (Just rel)) =
-  "<-["#|genRelationshipDetailCypher rel|#"]->"
+genRelationshipCypher (BiDirectional maybeRel) =
+  "<-["#|genRelationshipDetailCypher maybeRel|#"]->"
+genRelationshipCypher (ArrowLeft maybeRel) =
+  "<-["#|genRelationshipDetailCypher maybeRel|#"]-"
+genRelationshipCypher (ArrowRight maybeRel) =
+  "-["#|genRelationshipDetailCypher maybeRel|#"]->"
+genRelationshipCypher (NoDirection maybeRel) =
+  "-["#|genRelationshipDetailCypher maybeRel|#"]-"
 
-
-genRelationshipDetailCypher :: RelationshipDetail -> T.Text
-genRelationshipDetailCypher (RelationshipDetail maybeVar relTypes props) =
+genRelationshipDetailCypher :: Maybe RelationshipDetail -> T.Text
+genRelationshipDetailCypher (Just (RelationshipDetail maybeVar relTypes props)) =
   foldRelVarWithTypes maybeVar relTypes <> genPropsCypher props
-
+genRelationshipDetailCypher Nothing = ""
 
 foldRelVarWithTypes :: Maybe Variable -> [RelationshipType] -> T.Text
 foldRelVarWithTypes maybeVar relTypes =

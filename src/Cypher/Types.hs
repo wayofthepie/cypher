@@ -37,7 +37,7 @@ data RelationshipDetail = RelationshipDetail
 -- | TODO is this sufficient?
 newtype RelationshipType = RelationshipType T.Text deriving (Eq)
 
-newtype Variable = Variable T.Text deriving (Eq)
+newtype Variable = Variable T.Text deriving (Eq, Ord)
 
 -- | TODO the cypher spec has this as a MapLiteral or a parameter
 data Property = Property T.Text T.Text deriving (Eq)

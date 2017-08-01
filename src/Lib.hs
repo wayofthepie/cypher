@@ -1,7 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Lib where
 
 import Data.List
 import Data.Monoid
+import Fmt
+import Safe (headMay)
 import qualified Data.Text as T
 
 newtype Pattern = Pattern [PatternPart] deriving (Eq)
@@ -26,25 +29,28 @@ data NodePattern = NodePattern
 
 genNodePattern :: NodePattern -> T.Text
 genNodePattern (NodePattern maybeVar labels props) =
-  genNodePattern'
-  where
-    var = justOrEmpty maybeVar
-    genNodePattern' = T.pack "("
-      <> foldLabels var labels
-      <> T.pack " {" <> foldProps <> T.pack "}"
-      <> T.pack ")"
-    foldLabels = foldr (\(Label l) acc -> acc <> T.pack ":" <> l)
-    (h,props') = maybe (T.empty, [])
-      (\(Property k v, props') ->
-        (k <> T.pack ":" <> T.pack "\"" <> v <> T.pack "\"", props'))
-      (uncons props)
-    foldProps = foldr
-      (\(Property k v) acc -> acc <> T.pack ", " <> k <> T.pack ":" <> T.pack "\"" <> v <> T.pack "\"") h props'
+  ("("#|foldLabels maybeVar labels|#""#|genPropsPattern props|#")")
 
--- | Empty string if nothing, otherwise the variable value.
-justOrEmpty :: Maybe Variable -> T.Text
-justOrEmpty (Just (Variable v)) = v
-justOrEmpty Nothing = T.empty
+genPropsPattern :: [Property] -> T.Text
+genPropsPattern props =
+  maybe "" (\(first,rest) -> genPropsPattern' first rest) (uncons props)
+ where
+   genPropsPattern' f r = " {"#|foldProps f r|#"}"
+
+-- | Fold an optional variable name and labels into the expected format.
+foldLabels :: Maybe Variable -> [Label] -> T.Text
+foldLabels maybeVar labels =
+  let var = justOrEmpty maybeVar
+  in  foldr (\(Label l) acc -> ""#|acc|#":"#|l|#"") var labels
+ where
+  justOrEmpty :: Maybe Variable -> T.Text
+  justOrEmpty (Just (Variable v)) = v
+  justOrEmpty Nothing = T.empty
+
+foldProps :: Property -> [Property] -> T.Text
+foldProps (Property k v) props = foldr toPropTextAcc (""#|k|#":\""#|v|#"\"") props
+  where
+    toPropTextAcc (Property k v) acc = ""#| acc |#", "#| k |#":\""#| v |# "\""
 
 data PatternElementChain = PatternElementChain RelationshipPattern NodePattern
   deriving (Eq)

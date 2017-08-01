@@ -33,7 +33,7 @@ data RelationshipPattern
   | NoDirection (Maybe RelationshipDetail)
   deriving (Eq)
 
--- | TODO support range literals.
+-- TODO support range literals.
 data RelationshipDetail = RelationshipDetail
   { _relVar :: Maybe Variable
   , _relTypes :: [RelationshipType]
@@ -53,40 +53,67 @@ newtype Optional = Optional T.Text deriving (Eq)
 
 data Match = Match (Maybe Optional) Pattern deriving (Eq)
 
--------------------------------------------------------------------------------
--- Node
--------------------------------------------------------------------------------
+genPathCypher :: Path -> T.Text
+genPathCypher (Path node (Just chain)) =
+  genNodeCypher node <> genPatternChainCypher chain
+genPathCypher (Path node Nothing) = genNodeCypher node
+
+genPatternChainCypher :: PatternElementChain -> T.Text
+genPatternChainCypher (PatternElementChain rel node) =
+  genRelationshipCypher rel <> genNodeCypher node
+
 -- | Generate the cypher value representing a 'NodePattern'.
 --
 -- @
 -- >>> labels = [Label "MyLabel", Label "AnotherLabel"]
 -- >>> props = [Property "f" "dsfd"]
--- >>> genNodePattern $ NodePattern (Just (Variable "n")) labels props
+-- >>> genNodeCypher $ NodePattern (Just (Variable "n")) labels props
 -- "(n:AnotherLabel:MyLabel {f:\"dsfd\"})"
 -- @
-genNodePattern :: NodePattern -> T.Text
-genNodePattern (NodePattern maybeVar labels props) =
-  ("("#|foldLabels maybeVar labels|#""#|genPropsPattern props|#")")
+genNodeCypher :: NodePattern -> T.Text
+genNodeCypher (NodePattern maybeVar labels props) =
+  ("("#|foldVarWithLabels maybeVar labels|#""#|genPropsCypher props|#")")
 
+-- | Fold an optional variable name and labels into their cypher format.
+foldVarWithLabels :: Maybe Variable -> [Label] -> T.Text
+foldVarWithLabels maybeVar labels =
+  let var = justOrEmpty maybeVar
+  in  foldr (\(Label l) acc -> ""#|acc|#":"#|l|#"") var labels
+
+
+genRelationshipCypher :: RelationshipPattern -> T.Text
+genRelationshipCypher (BiDirectional (Just rel)) =
+  "<-["#|genRelationshipDetailCypher rel|#"]->"
+
+
+genRelationshipDetailCypher :: RelationshipDetail -> T.Text
+genRelationshipDetailCypher (RelationshipDetail maybeVar relTypes props) =
+  foldRelVarWithTypes maybeVar relTypes <> genPropsCypher props
+
+--------------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------------
 -- | Convert a list of properties into its cypher format.
-genPropsPattern :: [Property] -> T.Text
-genPropsPattern props =
+genPropsCypher :: [Property] -> T.Text
+genPropsCypher props =
   maybe "" (\(first,rest) -> genPropsPattern' first rest) (uncons props)
  where
    genPropsPattern' f r = " {"#|foldProps f r|#"}"
 
--- | Fold an optional variable name and labels into their cypher format.
-foldLabels :: Maybe Variable -> [Label] -> T.Text
-foldLabels maybeVar labels =
-  let var = justOrEmpty maybeVar
-  in  foldr (\(Label l) acc -> ""#|acc|#":"#|l|#"") var labels
+foldRelVarWithTypes :: Maybe Variable -> [RelationshipType] -> T.Text
+foldRelVarWithTypes maybeVar relTypes =
+  maybe var (uncurry f) (uncons relTypes)
  where
-  justOrEmpty :: Maybe Variable -> T.Text
-  justOrEmpty (Just (Variable v)) = v
-  justOrEmpty Nothing = T.empty
+  var = justOrEmpty maybeVar
+  f (RelationshipType rt) rts = foldRelVarWithTypes' (""#| var |#":"#| rt |#"") rts
+  foldRelVarWithTypes' = foldr (\(RelationshipType rt) acc -> ""#| acc |#":"#|rt|#"")
 
 -- | Fold a property and a list of properties into their cypher formats.
 foldProps :: Property -> [Property] -> T.Text
 foldProps (Property k v) props = foldr toPropTextAcc (""#|k|#":\""#|v|#"\"") props
   where
     toPropTextAcc (Property k v) acc = ""#| acc |#", "#| k |#":\""#| v |# "\""
+
+justOrEmpty :: Maybe Variable -> T.Text
+justOrEmpty (Just (Variable v)) = v
+justOrEmpty Nothing = T.empty

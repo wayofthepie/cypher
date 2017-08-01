@@ -17,40 +17,11 @@ data PatternPart
 newtype PatternElement = PatternElement Path deriving (Eq)
 data Path = Path NodePattern (Maybe PatternElementChain) deriving (Eq)
 
--- | Represents nodes in a pattern.
--- {
---  (n:Label {name: "SomeName"})
--- }
 data NodePattern = NodePattern
   { _var :: Maybe Variable
   , _labels :: [Label]
   , _props :: [Property]
   } deriving (Eq)
-
-genNodePattern :: NodePattern -> T.Text
-genNodePattern (NodePattern maybeVar labels props) =
-  ("("#|foldLabels maybeVar labels|#""#|genPropsPattern props|#")")
-
-genPropsPattern :: [Property] -> T.Text
-genPropsPattern props =
-  maybe "" (\(first,rest) -> genPropsPattern' first rest) (uncons props)
- where
-   genPropsPattern' f r = " {"#|foldProps f r|#"}"
-
--- | Fold an optional variable name and labels into the expected format.
-foldLabels :: Maybe Variable -> [Label] -> T.Text
-foldLabels maybeVar labels =
-  let var = justOrEmpty maybeVar
-  in  foldr (\(Label l) acc -> ""#|acc|#":"#|l|#"") var labels
- where
-  justOrEmpty :: Maybe Variable -> T.Text
-  justOrEmpty (Just (Variable v)) = v
-  justOrEmpty Nothing = T.empty
-
-foldProps :: Property -> [Property] -> T.Text
-foldProps (Property k v) props = foldr toPropTextAcc (""#|k|#":\""#|v|#"\"") props
-  where
-    toPropTextAcc (Property k v) acc = ""#| acc |#", "#| k |#":\""#| v |# "\""
 
 data PatternElementChain = PatternElementChain RelationshipPattern NodePattern
   deriving (Eq)
@@ -82,5 +53,40 @@ newtype Optional = Optional T.Text deriving (Eq)
 
 data Match = Match (Maybe Optional) Pattern deriving (Eq)
 
--- node :: Variable -> [Label] -> [Property] -> NodePattern
--- node = NodePattern
+-------------------------------------------------------------------------------
+-- Node
+-------------------------------------------------------------------------------
+-- | Generate the cypher value representing a 'NodePattern'.
+--
+-- @
+-- >>> labels = [Label "MyLabel", Label "AnotherLabel"]
+-- >>> props = [Property "f" "dsfd"]
+-- >>> genNodePattern $ NodePattern (Just (Variable "n")) labels props
+-- "(n:AnotherLabel:MyLabel {f:\"dsfd\"})"
+-- @
+genNodePattern :: NodePattern -> T.Text
+genNodePattern (NodePattern maybeVar labels props) =
+  ("("#|foldLabels maybeVar labels|#""#|genPropsPattern props|#")")
+
+-- | Convert a list of properties into its cypher format.
+genPropsPattern :: [Property] -> T.Text
+genPropsPattern props =
+  maybe "" (\(first,rest) -> genPropsPattern' first rest) (uncons props)
+ where
+   genPropsPattern' f r = " {"#|foldProps f r|#"}"
+
+-- | Fold an optional variable name and labels into their cypher format.
+foldLabels :: Maybe Variable -> [Label] -> T.Text
+foldLabels maybeVar labels =
+  let var = justOrEmpty maybeVar
+  in  foldr (\(Label l) acc -> ""#|acc|#":"#|l|#"") var labels
+ where
+  justOrEmpty :: Maybe Variable -> T.Text
+  justOrEmpty (Just (Variable v)) = v
+  justOrEmpty Nothing = T.empty
+
+-- | Fold a property and a list of properties into their cypher formats.
+foldProps :: Property -> [Property] -> T.Text
+foldProps (Property k v) props = foldr toPropTextAcc (""#|k|#":\""#|v|#"\"") props
+  where
+    toPropTextAcc (Property k v) acc = ""#| acc |#", "#| k |#":\""#| v |# "\""

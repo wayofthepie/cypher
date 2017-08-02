@@ -7,15 +7,6 @@ import qualified Data.Text as T
 
 import Cypher.Types
 
-data CypherEnv = CypherEnv
-  { _vars :: S.Set Variable
-  }
-
-match :: Pattern -> State CypherEnv T.Text
-match p = do
-  (CypherEnv s) <- get
-  let b = S.member (Variable "v") s
-  pure "f"
 
 data RightRel a = RDash a | RArrow a
 

@@ -34,8 +34,10 @@ test-suite cypher-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
+  other-modules: DslSpec
   build-depends:
     base
+    , tasty
     , tasty-discover
     , tasty-hunit
     , tasty-quickcheck
